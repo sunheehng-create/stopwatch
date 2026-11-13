@@ -1,0 +1,428 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>달려라 스탑워치</title>
+<style>
+  :root {
+    --ink: #121212; --muted: #78736a; --glass: rgba(255,255,255,.38); --glass-line: rgba(18,18,18,.14);
+    --chip: rgba(18,18,18,.05); --gold: #9c7a45; --shadow: rgba(0,0,0,.14);
+    --g1: #121212; --g2: #6a6459; --g3: #b8924f; --tick: rgba(18,18,18,.3); --tick-major: rgba(18,18,18,.75);
+    --bg: #ebe7df;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ink: #f2efe9; --muted: #9d988d; --glass: rgba(255,255,255,.04); --glass-line: rgba(255,255,255,.16);
+      --chip: rgba(255,255,255,.07); --gold: #d8b982; --shadow: rgba(0,0,0,.6);
+      --g1: #f2efe9; --g2: #a8a296; --g3: #d8b982;
+      --tick: rgba(255,255,255,.28); --tick-major: rgba(255,255,255,.8); --bg: #0c0c0e;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    min-height: 100vh; background: var(--bg); color: var(--ink);
+    font-family: "Pretendard", "Segoe UI Variable", "Segoe UI", "Malgun Gothic", system-ui, sans-serif;
+    display: flex; flex-direction: column; align-items: center; padding: 22px 16px 48px; gap: 18px;
+  }
+  #bg { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none; }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .tag { position: relative; z-index: 1; font-size: 11px; font-weight: 600; letter-spacing: .42em; text-transform: uppercase; padding: 4px 0 8px 12px; border-bottom: 1px solid var(--ink); }
+
+  /* ---------- 다이얼 ---------- */
+  .dial { --S: min(82vw, 420px); margin-top: 44px; position: relative; z-index: 1; width: var(--S); height: var(--S); }
+  .dial-face {
+    position: absolute; inset: 0; border-radius: 50%; background: var(--glass); border: 1px solid var(--glass-line);
+    backdrop-filter: blur(14px); box-shadow: 0 40px 90px var(--shadow);
+  }
+  .dial svg.ring { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+  #arc { transition: stroke-dashoffset .06s linear; }
+  .center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding-top: 2%; }
+  .time { font-family: "Didot", "Bodoni MT", "Noto Serif KR", "Batang", Georgia, serif; font-variant-numeric: tabular-nums lining-nums; font-weight: 300; font-size: calc(var(--S) * .17); letter-spacing: -.02em; line-height: 1; color: var(--ink); }
+  .time .ms { font-size: .5em; font-weight: 400; margin-left: 3px; color: var(--gold); font-style: italic; }
+  .lapnow { margin-top: calc(var(--S) * .02); font-size: calc(var(--S) * .034); color: var(--muted); font-variant-numeric: tabular-nums; min-height: 1.4em; font-weight: 600; }
+  .say { margin-top: calc(var(--S) * .03); font-size: calc(var(--S) * .036); font-weight: 700; padding: 5px 14px; border-radius: 99px; background: var(--chip); max-width: 70%; transition: opacity .3s, transform .3s; }
+  .say.pop { animation: pop .35s cubic-bezier(.3,1.6,.5,1); }
+  @keyframes pop { from { transform: scale(.8); opacity: .3; } to { transform: scale(1); opacity: 1; } }
+
+  /* ---------- 러너 ---------- */
+  #runner { position: absolute; width: calc(var(--S) * .19); aspect-ratio: 200 / 270; left: 50%; top: 6%; transform: translate(-50%, -88%); pointer-events: none; z-index: 3; }
+  #jumper { width: 100%; height: 100%; transform-origin: 50% 100%; }
+  #jumper.jump { animation: jump .6s cubic-bezier(.3,.7,.4,1); }
+  @keyframes jump { 0% { transform: scale(1.1,.88); } 35% { transform: translateY(-55%) scale(.95,1.08) rotate(-8deg); } 70% { transform: translateY(-50%) rotate(6deg); } 100% { transform: none; } }
+  #char { width: 100%; height: 100%; display: block; overflow: visible; filter: drop-shadow(0 6px 8px rgba(40,10,90,.3)); }
+  #char .bob { transform-origin: 100px 262px; }
+  #char .leg.l { transform-origin: 91px 192px; } #char .leg.r { transform-origin: 109px 192px; }
+  #char .arm.l { transform-origin: 70px 154px; } #char .arm.r { transform-origin: 130px 154px; }
+  #char .tail.tl { transform-origin: 52px 92px; } #char .tail.tr { transform-origin: 148px 92px; }
+  #char .eyes { transform-origin: 100px 106px; animation: blink 4.2s infinite; }
+  #char .ear { transform-origin: 100px 50px; }
+  #char .m-run, #char .m-rest, #char .sweat { display: none; }
+  #char[data-state="run"] .m-idle, #char[data-state="rest"] .m-idle { display: none; }
+  #char[data-state="run"] .m-run { display: inline; }
+  #char[data-state="rest"] .m-rest, #char[data-state="rest"] .sweat { display: inline; }
+  @keyframes blink { 0%, 93%, 100% { transform: scaleY(1); } 96% { transform: scaleY(.08); } }
+  #char[data-state="idle"] .bob, #char[data-state="rest"] .bob { animation: breathe 2.6s ease-in-out infinite alternate; }
+  #char[data-state="idle"] .tail.tl, #char[data-state="rest"] .tail.tl { animation: sway 2.6s ease-in-out infinite alternate; }
+  #char[data-state="idle"] .tail.tr, #char[data-state="rest"] .tail.tr { animation: sway2 2.6s ease-in-out infinite alternate; }
+  #char[data-state="idle"] .arm.r { animation: wave 1.2s ease-in-out infinite alternate; }
+  @keyframes breathe { from { transform: translateY(0); } to { transform: translateY(-4px) scale(1,1.015); } }
+  @keyframes sway { from { transform: rotate(-3deg); } to { transform: rotate(4deg); } }
+  @keyframes sway2 { from { transform: rotate(3deg); } to { transform: rotate(-4deg); } }
+  @keyframes wave { from { transform: rotate(0deg); } to { transform: rotate(-150deg); } }
+  #char[data-state="run"] .bob { animation: bob .3s ease-in-out infinite alternate; }
+  #char[data-state="run"] .leg.l { animation: legA .3s ease-in-out infinite alternate; }
+  #char[data-state="run"] .leg.r { animation: legB .3s ease-in-out infinite alternate; }
+  #char[data-state="run"] .arm.l { animation: armA .3s ease-in-out infinite alternate; }
+  #char[data-state="run"] .arm.r { animation: armB .3s ease-in-out infinite alternate; }
+  #char[data-state="run"] .tail.tl { animation: flutterL .3s ease-in-out infinite alternate; }
+  #char[data-state="run"] .tail.tr { animation: flutterR .3s ease-in-out infinite alternate; }
+  #char[data-state="run"] .ear { animation: earflap .3s ease-in-out infinite alternate; }
+  @keyframes bob { from { transform: translateY(0); } to { transform: translateY(-9px); } }
+  @keyframes legA { from { transform: rotate(-40deg); } to { transform: rotate(40deg); } }
+  @keyframes legB { from { transform: rotate(40deg); } to { transform: rotate(-40deg); } }
+  @keyframes armA { from { transform: rotate(50deg); } to { transform: rotate(-50deg); } }
+  @keyframes armB { from { transform: rotate(-50deg); } to { transform: rotate(50deg); } }
+  @keyframes flutterL { from { transform: rotate(6deg); } to { transform: rotate(-16deg); } }
+  @keyframes flutterR { from { transform: rotate(-6deg); } to { transform: rotate(16deg); } }
+  @keyframes earflap { from { transform: rotate(-3deg); } to { transform: rotate(3deg); } }
+
+  /* ---------- 버튼 ---------- */
+  .controls { position: relative; z-index: 1; display: flex; align-items: center; justify-content: center; gap: 26px; }
+  .btn { border: none; cursor: pointer; font: inherit; font-weight: 800; border-radius: 50%; transition: transform .12s, box-shadow .2s, opacity .2s; color: var(--ink); }
+  .btn:active:not(:disabled) { transform: scale(.93); }
+  .btn:focus-visible { outline: 3px solid var(--g3); outline-offset: 4px; }
+  .btn { letter-spacing: .12em; font-weight: 600; }
+  .btn-lap { width: 76px; height: 76px; font-size: 13px; background: transparent; border: 1px solid var(--ink); }
+  .btn-lap:hover:not(:disabled) { transform: translateY(-2px); }
+  .btn-lap:disabled { opacity: .45; cursor: default; }
+  .btn-start { width: 104px; height: 104px; font-size: 15px; color: var(--bg); background: var(--ink); box-shadow: 0 16px 36px var(--shadow); }
+  .btn-start:hover { transform: translateY(-2px) scale(1.03); }
+  .btn-start.running { background: transparent; color: var(--ink); border: 1.5px solid var(--ink); box-shadow: none; }
+
+  /* ---------- 기록 ---------- */
+  .laps-card { position: relative; z-index: 1; width: min(92vw, 420px); border-radius: 26px; background: var(--glass); border: 1px solid var(--glass-line); backdrop-filter: blur(12px); padding: 14px 18px 8px; box-shadow: 0 14px 40px var(--shadow); }
+  .laps-top { display: flex; justify-content: space-between; align-items: center; font-size: 12px; font-weight: 700; letter-spacing: .1em; color: var(--muted); padding-bottom: 8px; }
+  .copy { font: inherit; font-size: 12px; font-weight: 700; color: var(--ink); background: var(--chip); border: none; border-radius: 99px; padding: 5px 12px; cursor: pointer; }
+  .copy:disabled { opacity: .4; cursor: default; }
+  .copy:focus-visible { outline: 2px solid var(--g3); }
+  .laps { list-style: none; margin: 0; padding: 0; max-height: 210px; overflow-y: auto; }
+  .laps:empty::after { content: "달리기 시작하면 랩 깃발이 꽂혀요"; display: block; padding: 14px 0 16px; font-size: 14px; color: var(--muted); }
+  .laps li { display: flex; justify-content: space-between; align-items: center; padding: 10px 4px; border-top: 1px solid var(--glass-line); font-variant-numeric: tabular-nums; font-size: 16px; font-weight: 600; }
+  .laps li span:first-child { color: var(--muted); font-weight: 700; font-size: 14px; }
+  .laps li.current span:first-child { color: var(--g1); }
+  .laps li.best span:last-child { color: var(--gold); font-weight: 800; }
+  .laps li.best span:first-child::after { content: " ★"; color: var(--gold); }
+  .laps li.worst span:last-child { opacity: .55; }
+  .hint { position: relative; z-index: 1; font-size: 12px; color: var(--muted); }
+
+  @media (prefers-reduced-motion: reduce) { #char *, #jumper, .say { animation: none !important; } #arc { transition: none; } }
+</style>
+</head>
+<body>
+<canvas id="bg" aria-hidden="true"></canvas>
+
+<div class="tag">Stopwatch</div>
+
+<div class="dial" id="dial">
+  <div class="dial-face"></div>
+  <svg class="ring" viewBox="0 0 100 100" aria-hidden="true">
+    <defs>
+      <linearGradient id="ringG" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" style="stop-color:var(--g3)"/><stop offset="1" style="stop-color:var(--g1)"/>
+      </linearGradient>
+      <filter id="glow" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="1.4"/></filter>
+    </defs>
+    <g id="ticks"></g>
+    <circle cx="50" cy="50" r="44" fill="none" stroke="var(--tick)" stroke-width="1.4" opacity=".6"/>
+    <g transform="rotate(-90 50 50)">
+      <circle id="arcGlow" cx="50" cy="50" r="44" fill="none" stroke="url(#ringG)" stroke-width="3.6" stroke-linecap="round" stroke-dasharray="276.46" stroke-dashoffset="276.46" filter="url(#glow)" opacity=".7"/>
+      <circle id="arc" cx="50" cy="50" r="44" fill="none" stroke="url(#ringG)" stroke-width="3" stroke-linecap="round" stroke-dasharray="276.46" stroke-dashoffset="276.46"/>
+    </g>
+    <g id="flags"></g>
+  </svg>
+  <div class="center">
+    <div class="time" id="display" role="timer" aria-live="off"><span id="dMain">00:00</span><span class="ms" id="dMs">.00</span></div>
+    <div class="lapnow" id="lapNow"></div>
+    <div class="say" id="say">준비됐어? 출발 버튼!</div>
+  </div>
+
+  <div id="runner" aria-hidden="true"><div id="jumper">
+  <svg id="char" data-state="idle" viewBox="0 0 200 270" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <linearGradient id="hairG" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ece8f2"/><stop offset="1" stop-color="#9a96b4"/></linearGradient>
+      <radialGradient id="irisG" cx=".5" cy=".35" r=".7"><stop offset="0" stop-color="#7fe3ff"/><stop offset=".6" stop-color="#6a5cff"/><stop offset="1" stop-color="#2b1f7a"/></radialGradient>
+    </defs>
+    <g class="bob">
+      <g class="tail tl"><path d="M54 80 C20 90 10 150 28 196 C34 170 46 150 60 138Z" fill="url(#hairG)"/><circle cx="52" cy="86" r="8" fill="#d8b982"/></g>
+      <g class="tail tr"><path d="M146 80 C180 90 190 150 172 196 C166 170 154 150 140 138Z" fill="url(#hairG)"/><circle cx="148" cy="86" r="8" fill="#d8b982"/></g>
+      <g class="leg l"><rect x="84" y="190" width="15" height="52" rx="7.5" fill="#ffe3d3"/><path d="M80 238 Q92 230 104 238 L106 250 H78Z" fill="#d8b982"/><rect x="78" y="246" width="28" height="5" rx="2.5" fill="#fff"/></g>
+      <g class="leg r"><rect x="101" y="190" width="15" height="52" rx="7.5" fill="#ffe3d3"/><path d="M96 238 Q108 230 120 238 L122 250 H94Z" fill="#d8b982"/><rect x="94" y="246" width="28" height="5" rx="2.5" fill="#fff"/></g>
+      <path d="M66 150 Q100 140 134 150 L140 202 Q100 212 60 202Z" fill="#1b1b21"/>
+      <path d="M86 146 Q100 160 114 146" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round"/>
+      <path d="M94 152 V172 M106 152 V172" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/>
+      <path d="M100 176 l3.5 7 7.5 1 -5.5 5 1.5 7.5 -7 -3.8 -7 3.8 1.5 -7.5 -5.5 -5 7.5 -1z" fill="#d8b982"/>
+      <path d="M62 198 Q100 208 138 198 L138 206 Q100 216 62 206Z" fill="#0e0e12"/>
+      <g class="arm l"><rect x="58" y="148" width="16" height="48" rx="8" fill="#1b1b21"/><circle cx="66" cy="200" r="9" fill="#ffe3d3"/></g>
+      <g class="arm r"><rect x="126" y="148" width="16" height="48" rx="8" fill="#1b1b21"/><circle cx="134" cy="200" r="9" fill="#ffe3d3"/></g>
+      <ellipse cx="100" cy="98" rx="58" ry="56" fill="url(#hairG)"/>
+      <circle cx="100" cy="100" r="52" fill="#ffe9dc"/>
+      <path d="M44 96 C42 48 76 34 100 34 C126 34 158 50 156 96 C146 84 136 76 124 70 C118 86 100 88 90 70 C82 82 62 88 44 96Z" fill="url(#hairG)"/>
+      <path d="M44 100 C46 124 52 134 54 134 C56 120 54 108 52 98Z" fill="url(#hairG)"/>
+      <path d="M156 100 C154 124 148 134 146 134 C144 120 146 108 148 98Z" fill="url(#hairG)"/>
+      <path d="M100 36 Q90 14 108 8 Q102 22 112 34" fill="none" stroke="#ece8f2" stroke-width="5" stroke-linecap="round"/>
+      <g class="ear">
+        <path d="M54 62 L58 28 L84 46Z" fill="#d8b982"/><path d="M60 54 L62 38 L74 46Z" fill="#ece8f2"/>
+        <path d="M146 62 L142 28 L116 46Z" fill="#d8b982"/><path d="M140 54 L138 38 L126 46Z" fill="#ece8f2"/>
+      </g>
+      <g class="eyes">
+        <ellipse cx="76" cy="108" rx="12" ry="15" fill="#2b1f7a"/><ellipse cx="76" cy="108" rx="10.5" ry="13.5" fill="url(#irisG)"/>
+        <circle cx="81" cy="101" r="4.6" fill="#fff"/><circle cx="72" cy="114" r="2.2" fill="#fff"/>
+        <ellipse cx="124" cy="108" rx="12" ry="15" fill="#2b1f7a"/><ellipse cx="124" cy="108" rx="10.5" ry="13.5" fill="url(#irisG)"/>
+        <circle cx="129" cy="101" r="4.6" fill="#fff"/><circle cx="120" cy="114" r="2.2" fill="#fff"/>
+      </g>
+      <ellipse cx="62" cy="126" rx="9" ry="5.5" fill="#ff8fb1" opacity=".55"/>
+      <ellipse cx="138" cy="126" rx="9" ry="5.5" fill="#ff8fb1" opacity=".55"/>
+      <path class="m-idle" d="M91 128 Q100 138 109 128" fill="none" stroke="#b8475f" stroke-width="3" stroke-linecap="round"/>
+      <path class="m-run" d="M90 126 Q100 124 110 126 Q108 142 100 142 Q92 142 90 126Z" fill="#b8475f"/>
+      <path class="m-run" d="M94 135 Q100 131 106 135 Q104 141 100 141 Q96 141 94 135Z" fill="#ff8fa3"/>
+      <path class="m-rest" d="M91 132 Q100 126 109 132" fill="none" stroke="#b8475f" stroke-width="3" stroke-linecap="round"/>
+      <path class="sweat" d="M152 78 Q160 92 152 98 Q144 92 152 78Z" fill="#8fdcff"/>
+    </g>
+  </svg>
+  </div></div>
+</div>
+
+<div class="controls">
+  <button class="btn btn-lap" id="lapBtn" disabled>랩</button>
+  <button class="btn btn-start" id="startBtn">출발</button>
+</div>
+
+<div class="laps-card">
+  <div class="laps-top"><span>LAPS</span><button class="copy" id="copyBtn" disabled>기록 복사</button></div>
+  <ul class="laps" id="laps"></ul>
+</div>
+
+<div class="hint">Space 출발/정지 · L 랩 · R 초기화</div>
+<div class="sr" id="announce" aria-live="polite"></div>
+
+<script>
+  const $ = id => document.getElementById(id);
+  const dMain = $('dMain'), dMs = $('dMs'), startBtn = $('startBtn'), lapBtn = $('lapBtn'), copyBtn = $('copyBtn');
+  const lapsEl = $('laps'), announce = $('announce'), sayEl = $('say'), lapNow = $('lapNow');
+  const charEl = $('char'), jumper = $('jumper'), runner = $('runner');
+  const arc = $('arc'), arcGlow = $('arcGlow'), flagsG = $('flags');
+  const CIRC = 2 * Math.PI * 44;
+  const SVGNS = 'http://www.w3.org/2000/svg';
+
+  let running = false, startTime = 0, elapsed = 0, lapStart = 0, laps = [], marks = [], raf = null, lapPulse = 0;
+  const KEY = 'stopwatch_v5_state';
+  const total = () => running ? elapsed + (Date.now() - startTime) : elapsed;
+  const p2 = n => String(n).padStart(2, '0');
+  function fmt(ms) {
+    const cs = Math.floor(ms / 10) % 100, s = Math.floor(ms / 1000) % 60, m = Math.floor(ms / 60000) % 60, h = Math.floor(ms / 3600000);
+    return { main: (h ? h + ':' : '') + p2(m) + ':' + p2(s), cs: '.' + p2(cs) };
+  }
+
+  /* 눈금 */
+  (function () {
+    const g = $('ticks');
+    for (let i = 0; i < 60; i++) {
+      const major = i % 5 === 0, a = i * Math.PI / 30, r1 = major ? 39.5 : 41, r2 = 42.5;
+      const l = document.createElementNS(SVGNS, 'line');
+      l.setAttribute('x1', 50 + r1 * Math.sin(a)); l.setAttribute('y1', 50 - r1 * Math.cos(a));
+      l.setAttribute('x2', 50 + r2 * Math.sin(a)); l.setAttribute('y2', 50 - r2 * Math.cos(a));
+      l.setAttribute('stroke', major ? 'var(--tick-major)' : 'var(--tick)'); l.setAttribute('stroke-width', major ? 1.1 : .6); l.setAttribute('stroke-linecap', 'round');
+      g.appendChild(l);
+    }
+  })();
+
+  function save() { try { localStorage.setItem(KEY, JSON.stringify({ running, startTime, elapsed, lapStart, laps, marks })); } catch (e) {} }
+  function load() {
+    try {
+      const s = JSON.parse(localStorage.getItem(KEY) || 'null'); if (!s) return;
+      running = !!s.running; startTime = s.startTime || 0; elapsed = s.elapsed || 0; lapStart = s.lapStart || 0;
+      laps = Array.isArray(s.laps) ? s.laps : []; marks = Array.isArray(s.marks) ? s.marks : [];
+    } catch (e) {}
+  }
+
+  /* 말풍선(중앙 캡션) */
+  const cheers = ['달려라~!', '집중 집중!', '좋아, 이 페이스!', '숨 쉬는 것도 잊지 마!', '대단해, 계속 가자!', '파이팅!!'];
+  let sayLock = 0, lastSec = -1;
+  function say(text, hold) {
+    sayEl.textContent = text; sayEl.classList.remove('pop'); void sayEl.offsetWidth; sayEl.classList.add('pop');
+    sayLock = hold ? performance.now() + hold : 0;
+  }
+  function setState(s) {
+    charEl.dataset.state = s;
+    say(s === 'idle' ? '준비됐어? 출발 버튼!' : s === 'rest' ? '잠깐 숨 고르는 중…' : '출발~!!', s === 'run' ? 1500 : 0);
+  }
+  function jump() { jumper.classList.remove('jump'); void jumper.offsetWidth; jumper.classList.add('jump'); }
+
+  function drawFlags() {
+    flagsG.innerHTML = '';
+    marks.forEach((ms, i) => {
+      const a = (ms / 60000) * 2 * Math.PI, x = 50 + 44 * Math.sin(a), y = 50 - 44 * Math.cos(a);
+      const g = document.createElementNS(SVGNS, 'g');
+      g.innerHTML = '<line x1="' + x + '" y1="' + y + '" x2="' + x + '" y2="' + (y - 5.5) + '" stroke="#fff" stroke-width=".7"/>' +
+        '<path d="M' + x + ' ' + (y - 5.5) + ' l4 1.6 -4 1.6z" fill="#9c7a45"/><circle cx="' + x + '" cy="' + y + '" r="1.1" fill="#9c7a45"/>';
+      flagsG.appendChild(g);
+    });
+  }
+
+  function placeRunner(t) {
+    const frac = (t / 60000) % 1, a = frac * 2 * Math.PI;
+    runner.style.left = (50 + 44 * Math.sin(a)) + '%';
+    runner.style.top = (50 - 44 * Math.cos(a)) + '%';
+    const off = CIRC * (1 - frac);
+    arc.style.strokeDashoffset = off; arcGlow.style.strokeDashoffset = off;
+  }
+
+  function render() {
+    const t = total(), f = fmt(t);
+    if (dMain.textContent !== f.main) dMain.textContent = f.main;
+    dMs.textContent = f.cs;
+    placeRunner(t);
+    const l = fmt(t - lapStart);
+    lapNow.textContent = (running || elapsed > 0) ? '랩 ' + (laps.length + 1) + ' · ' + l.main + l.cs : '';
+    const cur = lapsEl.querySelector('li.current');
+    if (cur) cur.lastElementChild.textContent = l.main + l.cs;
+    const sec = Math.floor(t / 1000);
+    if (sec !== lastSec) {
+      lastSec = sec; document.title = running ? f.main + ' · 달려라 스탑워치' : '달려라 스탑워치';
+      if (running && sec > 0 && sec % 10 === 0 && performance.now() > sayLock) say(cheers[(sec / 10) % cheers.length]);
+    }
+  }
+  function tick() { render(); raf = requestAnimationFrame(tick); }
+
+  function renderLaps() {
+    lapsEl.innerHTML = '';
+    if (running || elapsed > 0) {
+      const cur = document.createElement('li'); cur.className = 'current';
+      cur.innerHTML = '<span>랩 ' + (laps.length + 1) + '</span><span></span>'; lapsEl.appendChild(cur);
+    }
+    let min = -1, max = -1;
+    if (laps.length >= 2) { min = laps.indexOf(Math.min(...laps)); max = laps.lastIndexOf(Math.max(...laps)); }
+    for (let i = laps.length - 1; i >= 0; i--) {
+      const li = document.createElement('li');
+      if (i === min) li.className = 'best'; else if (i === max) li.className = 'worst';
+      const f = fmt(laps[i]); li.innerHTML = '<span>랩 ' + (i + 1) + '</span><span>' + f.main + f.cs + '</span>'; lapsEl.appendChild(li);
+    }
+    copyBtn.disabled = laps.length === 0;
+  }
+
+  function applyUI() {
+    startBtn.textContent = running ? '정지' : (elapsed > 0 ? '계속' : '출발');
+    startBtn.classList.toggle('running', running);
+    lapBtn.textContent = running || elapsed === 0 ? '랩' : '리셋';
+    lapBtn.disabled = !running && elapsed === 0;
+    setState(running ? 'run' : elapsed > 0 ? 'rest' : 'idle');
+    renderLaps(); drawFlags(); lastSec = -1; render();
+  }
+
+  function toggle() {
+    if (running) { elapsed += Date.now() - startTime; running = false; cancelAnimationFrame(raf); }
+    else { startTime = Date.now(); running = true; tick(); }
+    applyUI(); save();
+  }
+  function lapOrReset() {
+    if (running) {
+      const t = total(); laps.push(t - lapStart); marks.push(t); lapStart = t;
+      renderLaps(); drawFlags(); jump(); lapPulse = 1;
+      const f = fmt(laps[laps.length - 1]);
+      say('랩 ' + laps.length + ' 깃발! ' + f.main + f.cs, 1800);
+      announce.textContent = '랩 ' + laps.length + ' ' + f.main + f.cs; save();
+    } else if (elapsed > 0) reset();
+  }
+  function reset() {
+    running = false; elapsed = 0; lapStart = 0; laps = []; marks = [];
+    cancelAnimationFrame(raf); applyUI(); save();
+  }
+  copyBtn.addEventListener('click', async () => {
+    const text = laps.map((l, i) => '랩 ' + (i + 1) + '\t' + fmt(l).main + fmt(l).cs).join('\n');
+    try { await navigator.clipboard.writeText(text); copyBtn.textContent = '복사됨 ✓'; }
+    catch (e) { copyBtn.textContent = '복사 실패'; }
+    setTimeout(() => copyBtn.textContent = '기록 복사', 1400);
+  });
+
+  startBtn.addEventListener('click', toggle);
+  lapBtn.addEventListener('click', lapOrReset);
+  document.addEventListener('keydown', e => {
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    if (e.code === 'Space') { e.preventDefault(); if (!e.repeat) toggle(); }
+    else if (e.key === 'l' || e.key === 'L') { if (running) lapOrReset(); }
+    else if (e.key === 'r' || e.key === 'R') { if (!running && elapsed > 0) reset(); }
+  });
+  document.addEventListener('keyup', e => { if (e.code === 'Space') e.preventDefault(); });
+  addEventListener('beforeunload', save);
+
+  /* ---------- 배경: 시간에 따라 색이 흐르는 하늘 ---------- */
+  const cv = $('bg'), cx = cv.getContext('2d');
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const dark = matchMedia('(prefers-color-scheme: dark)');
+  let W = 0, H = 0, lastT = performance.now(), speed = 0, acc = 0;
+  const blobs = Array.from({ length: 6 }, (_, i) => ({ x: Math.random(), y: Math.random(), r: .25 + Math.random() * .25, ph: Math.random() * 6, h: i * 40 }));
+  const bits = Array.from({ length: 46 }, () => ({ x: Math.random(), y: Math.random(), s: 3 + Math.random() * 5, v: 14 + Math.random() * 26, r: Math.random() * 6, vr: 1 + Math.random() * 2, ph: Math.random() * 6, star: Math.random() < .4 }));
+  const shooters = [];
+
+  function resize() {
+    const d = devicePixelRatio || 1; W = innerWidth; H = innerHeight;
+    cv.width = W * d; cv.height = H * d; cx.setTransform(d, 0, 0, d, 0, 0);
+    draw(0.016);
+  }
+  addEventListener('resize', resize);
+
+  function draw(dt) {
+    const isDark = dark.matches, t = performance.now() / 1000, tot = total() / 1000;
+    speed += ((running ? 1 : 0) - speed) * Math.min(dt * 3, 1);
+    const hue = 34 + 12 * Math.sin(tot / 22);
+    const g = cx.createLinearGradient(0, 0, W * .3, H);
+    if (isDark) { g.addColorStop(0, `hsl(${hue},8%,5%)`); g.addColorStop(1, `hsl(${hue},12%,13%)`); }
+    else { g.addColorStop(0, `hsl(${hue},22%,93%)`); g.addColorStop(1, `hsl(${hue + 6},24%,82%)`); }
+    cx.fillStyle = g; cx.fillRect(0, 0, W, H);
+
+    for (const b of blobs) {
+      const x = (b.x + Math.sin(t / 9 + b.ph) * .08 + speed * Math.sin(t / 3 + b.ph) * .02) * W, y = (b.y + Math.cos(t / 11 + b.ph) * .08) * H, r = b.r * Math.max(W, H) * (1 + .1 * speed);
+      const rg = cx.createRadialGradient(x, y, 0, x, y, r);
+      const bh = hue + b.h * .1;
+      rg.addColorStop(0, isDark ? `hsla(${bh},35%,60%,.12)` : `hsla(${bh},60%,98%,.6)`); rg.addColorStop(1, `hsla(${bh},40%,70%,0)`);
+      cx.fillStyle = rg; cx.fillRect(0, 0, W, H);
+    }
+
+    for (const q of bits) {
+      q.x -= dt * (q.v * .4 + 240 * speed * (q.s / 6)) / W; q.y += dt * (q.v * .5 + 10) / H; q.r += dt * q.vr * (1 + 2 * speed);
+      if (q.x < -.05) { q.x = 1.05; q.y = Math.random(); } if (q.y > 1.05) q.y = -.05;
+      cx.save(); cx.translate(q.x * W, q.y * H + Math.sin(t * 2 + q.ph) * 6); cx.rotate(q.r);
+      if (q.star && isDark) { cx.globalAlpha = .5 + .5 * Math.sin(t * 3 + q.ph); cx.fillStyle = '#fff'; cx.fillRect(-q.s / 2, -q.s / 2, q.s, q.s); }
+      else { cx.fillStyle = isDark ? 'rgba(216,185,130,.5)' : 'rgba(156,122,69,.38)'; cx.beginPath(); cx.ellipse(0, 0, q.s, q.s * .55, 0, 0, 7); cx.fill(); }
+      cx.restore(); cx.globalAlpha = 1;
+    }
+
+    if (lapPulse > 0) { // 랩 기록 시 유성
+      lapPulse = 0;
+      for (let i = 0; i < 3; i++) shooters.push({ x: Math.random() * W * .8 + W * .2, y: Math.random() * H * .3, life: 1, d: i * .12 });
+    }
+    for (let i = shooters.length - 1; i >= 0; i--) {
+      const s = shooters[i]; s.d -= dt; if (s.d > 0) continue; s.life -= dt * 1.4;
+      if (s.life <= 0) { shooters.splice(i, 1); continue; }
+      s.x -= dt * 700; s.y += dt * 380;
+      const gr = cx.createLinearGradient(s.x, s.y, s.x + 120, s.y - 65);
+      const sc = isDark ? '255,255,255' : '156,122,69';
+      gr.addColorStop(0, `rgba(${sc},${s.life})`); gr.addColorStop(1, `rgba(${sc},0)`);
+      cx.strokeStyle = gr; cx.lineWidth = 3; cx.lineCap = 'round'; cx.beginPath(); cx.moveTo(s.x, s.y); cx.lineTo(s.x + 120, s.y - 65); cx.stroke();
+    }
+  }
+
+  function loop(now) {
+    const dt = Math.min((now - lastT) / 1000, 0.1); lastT = now;
+    acc += dt;
+    if (running || speed > 0.01 || shooters.length || acc > 1 / 20) { draw(acc); acc = 0; } // 멈춰 있을 땐 ~20fps로 절전
+    requestAnimationFrame(loop);
+  }
+
+  load(); resize(); if (running) tick(); applyUI();
+  if (!reduced) requestAnimationFrame(loop);
+</script>
+</body>
+</html>
